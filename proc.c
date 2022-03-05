@@ -532,3 +532,35 @@ procdump(void)
     cprintf("\n");
   }
 }
+
+int
+sys_newsyscall(void)
+{
+  struct proc *proc;
+  // int num;
+  // argptr(0, (void *)&num, sizeof(num));
+  acquire(&ptable.lock);
+  proc = ptable.proc;
+  int procCount = 0;
+  int zombieCount = 0;
+  int runnableCount = 0;
+  int sleepCount = 0;
+
+  for(; proc < &ptable.proc[NPROC]; proc++)
+  {
+    if(proc->state != UNUSED)
+      procCount++;
+    if(proc->state != ZOMBIE)
+      zombieCount++;
+    if(proc->state != RUNNING)
+      runnableCount++;
+    if(proc->state != SLEEPING)
+      sleepCount++;
+  }
+
+  release(&ptable.lock);
+  cprintf("Number of RUNNABLE process : %d\n",runnableCount);
+  cprintf("Number of SLEEPING process : %d\n",sleepCount);
+  cprintf("Number of ZOMBIE process : %d\n",zombieCount);
+  return 0;
+}

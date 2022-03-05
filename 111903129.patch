@@ -1,0 +1,127 @@
+diff --git a/Makefile b/Makefile
+index 0f344d0..cd0760b 100644
+--- a/Makefile
++++ b/Makefile
+@@ -181,7 +181,9 @@ UPROGS=\
+ 	_usertests\
+ 	_wc\
+ 	_zombie\
+-        _cp\
++    _cp\
++	_hello\
++	_newsyscall\
+ 
+ fs.img: mkfs README $(UPROGS)
+ 	./mkfs fs.img README $(UPROGS)
+diff --git a/proc.c b/proc.c
+index 806b1b1..d13d26d 100644
+--- a/proc.c
++++ b/proc.c
+@@ -532,3 +532,35 @@ procdump(void)
+     cprintf("\n");
+   }
+ }
++
++int
++sys_newsyscall(void)
++{
++  struct proc *proc;
++  // int num;
++  // argptr(0, (void *)&num, sizeof(num));
++  acquire(&ptable.lock);
++  proc = ptable.proc;
++  int procCount = 0;
++  int zombieCount = 0;
++  int runnableCount = 0;
++  int sleepCount = 0;
++
++  for(; proc < &ptable.proc[NPROC]; proc++)
++  {
++    if(proc->state != UNUSED)
++      procCount++;
++    if(proc->state != ZOMBIE)
++      zombieCount++;
++    if(proc->state != RUNNING)
++      runnableCount++;
++    if(proc->state != SLEEPING)
++      sleepCount++;
++  }
++
++  release(&ptable.lock);
++  cprintf("Number of RUNNABLE process : %d\n",runnableCount);
++  cprintf("Number of SLEEPING process : %d\n",sleepCount);
++  cprintf("Number of ZOMBIE process : %d\n",zombieCount);
++  return 0;
++}
+\ No newline at end of file
+diff --git a/syscall.c b/syscall.c
+index ee85261..ffeacc7 100644
+--- a/syscall.c
++++ b/syscall.c
+@@ -103,6 +103,8 @@ extern int sys_unlink(void);
+ extern int sys_wait(void);
+ extern int sys_write(void);
+ extern int sys_uptime(void);
++extern int sys_hello(void);
++extern int sys_newsyscall(void);
+ 
+ static int (*syscalls[])(void) = {
+ [SYS_fork]    sys_fork,
+@@ -126,6 +128,8 @@ static int (*syscalls[])(void) = {
+ [SYS_link]    sys_link,
+ [SYS_mkdir]   sys_mkdir,
+ [SYS_close]   sys_close,
++[SYS_hello]   sys_hello,
++[SYS_newsyscall]  sys_newsyscall,
+ };
+ 
+ void
+diff --git a/syscall.h b/syscall.h
+index bc5f356..d3e635a 100644
+--- a/syscall.h
++++ b/syscall.h
+@@ -20,3 +20,5 @@
+ #define SYS_link   19
+ #define SYS_mkdir  20
+ #define SYS_close  21
++#define SYS_hello  22
++#define SYS_newsyscall  23
+diff --git a/sysfile.c b/sysfile.c
+index bfe61b7..4bb2b1f 100644
+--- a/sysfile.c
++++ b/sysfile.c
+@@ -442,3 +442,10 @@ sys_pipe(void)
+   fd[1] = fd1;
+   return 0;
+ }
++
++int
++sys_hello(void)
++{
++  cprintf("Hello xv6\n");
++  return 0;
++}
+\ No newline at end of file
+diff --git a/user.h b/user.h
+index 4f99c52..7d04afc 100644
+--- a/user.h
++++ b/user.h
+@@ -23,6 +23,8 @@ int getpid(void);
+ char* sbrk(int);
+ int sleep(int);
+ int uptime(void);
++int hello(void);
++int newsyscall(void);
+ 
+ // ulib.c
+ int stat(const char*, struct stat*);
+diff --git a/usys.S b/usys.S
+index 8bfd8a1..0f12935 100644
+--- a/usys.S
++++ b/usys.S
+@@ -29,3 +29,5 @@ SYSCALL(getpid)
+ SYSCALL(sbrk)
+ SYSCALL(sleep)
+ SYSCALL(uptime)
++SYSCALL(hello)
++SYSCALL(newsyscall)
