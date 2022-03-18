@@ -1,0 +1,99 @@
+diff --git a/kalloc.c b/kalloc.c
+index 14cd4f4..98583a8 100644
+--- a/kalloc.c
++++ b/kalloc.c
+@@ -13,14 +13,24 @@ void freerange(void *vstart, void *vend);
+ extern char end[]; // first address after kernel loaded from ELF file
+                    // defined by the kernel linker script in kernel.ld
+ 
+-struct run {
+-  struct run *next;
+-};
++// struct run {
++//   struct run *next;
++// };
++typedef struct queueNode {
++    struct queueNode *nextSlot;
++} queueNode;
++
++typedef struct queue{
++  struct queueNode *end;
++  struct queueNode *start;
++}Queue;
++
++#define NULL_QUEUE 0
+ 
+ struct {
+   struct spinlock lock;
+   int use_lock;
+-  struct run *freelist;
++  Queue freelist;
+ } kmem;
+ 
+ // Initialization happens in two phases.
+@@ -33,6 +43,8 @@ kinit1(void *vstart, void *vend)
+ {
+   initlock(&kmem.lock, "kmem");
+   kmem.use_lock = 0;
++  kmem.freelist.start = NULL_QUEUE;
++  kmem.freelist.end = NULL_QUEUE;
+   freerange(vstart, vend);
+ }
+ 
+@@ -59,7 +71,7 @@ freerange(void *vstart, void *vend)
+ void
+ kfree(char *v)
+ {
+-  struct run *r;
++  struct queueNode *Q;
+ 
+   if((uint)v % PGSIZE || v < end || V2P(v) >= PHYSTOP)
+     panic("kfree");
+@@ -69,9 +81,18 @@ kfree(char *v)
+ 
+   if(kmem.use_lock)
+     acquire(&kmem.lock);
+-  r = (struct run*)v;
+-  r->next = kmem.freelist;
+-  kmem.freelist = r;
++  Q = (queueNode*) v;
++  Q->nextSlot = NULL_QUEUE;
++
++  if ((kmem.freelist.start == NULL_QUEUE) && (kmem.freelist.end == NULL_QUEUE)) {
++    kmem.freelist.start = Q;
++    kmem.freelist.end = Q;
++  }
++  else {
++    (kmem.freelist.end)->nextSlot = Q;
++    kmem.freelist.end = Q;
++  }
++
+   if(kmem.use_lock)
+     release(&kmem.lock);
+ }
+@@ -82,15 +103,20 @@ kfree(char *v)
+ char*
+ kalloc(void)
+ {
+-  struct run *r;
++  struct queueNode *Q;
+ 
+   if(kmem.use_lock)
+     acquire(&kmem.lock);
+-  r = kmem.freelist;
+-  if(r)
+-    kmem.freelist = r->next;
++  Q = kmem.freelist.start;
++  if(Q){
++    if (kmem.freelist.start == kmem.freelist.end) {
++      kmem.freelist.end = NULL_QUEUE;
++    }
++    kmem.freelist.start = Q->nextSlot;
++    Q->nextSlot = NULL_QUEUE;
++  }
+   if(kmem.use_lock)
+     release(&kmem.lock);
+-  return (char*)r;
++  return (char*)Q;
+ }
+ 
